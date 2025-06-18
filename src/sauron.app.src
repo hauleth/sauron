@@ -1,0 +1,28 @@
+% SPDX-FileCopyrightText: 2025 Łukasz Niemier <~@hauleth.dev>
+%
+% SPDX-License-Identifier: Apache-2.0
+
+{application, sauron, [
+    {description, "Monitor Erlang VM for system events"},
+    {vsn, git},
+    {registered, []},
+    {mod, {sauron_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        telemetry
+    ]},
+    {env, [
+        {monitor, [
+            {long_gc, 250},
+            {long_message_queue, {50, 500}},
+            {long_schedule, 100},
+            {large_heap, 10000},
+            {busy_port, true},
+            {busy_dist_port, true}
+        ]}
+    ]},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.
