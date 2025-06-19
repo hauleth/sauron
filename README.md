@@ -65,25 +65,25 @@ list is:
     + metadata:
         - `port`
         - `operation`
-* `erlang.sys_monitor.long_message_queue`:
+* `erlang.sys_mon.long_message_queue`:
     + measurements:
         - `count`
     + metadata:
         - `pid`
-* `erlang.sys_monitor.busy_port`:
+* `erlang.sys_mon.busy_port`:
     + measurement:
         - `count`
     + metadata:
         - `suspended_pid`
         - `port`
-* `erlang.sys_monitor.busy_dist_port`:
+* `erlang.sys_mon.busy_dist_port`:
     + measurement:
         - `count`
     + metadata:
         - `suspended_pid`
         - `port`
 
-For details of these values check out `trace:system/3` documentation in OTP.
+For details of these values check out `erlang:system_monitor/2` documentation in OTP.
 
 ## License
 
