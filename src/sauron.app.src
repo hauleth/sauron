@@ -17,9 +17,8 @@
             {long_gc, 250},
             {long_message_queue, {50, 500}},
             {long_schedule, 100},
-            % 512 KiB on 32 bit platforms
-            %   1 MiB on 64 bit platforms
-            {large_heap, 131072},
+            % 8 MiB on 64 bit platforms
+            {large_heap, 1048576},
             {busy_port, true},
             {busy_dist_port, true}
         ]}
