@@ -48,7 +48,7 @@ execute(Type, Pid, Info) when Type =:= long_gc; Type =:= large_heap ->
 execute(long_schedule, Pid, Info) when is_pid(Pid) ->
     {timeout, Timeout} = lists:keyfind(timeout, 1, Info),
     {in, In} = lists:keyfind(in, 1, Info),
-    {out, Out} = lists:keyfond(out, 1, Info),
+    {out, Out} = lists:keyfind(out, 1, Info),
 
     telemetry:execute(
         [erlang, sys_mon, long_schedule, process],
