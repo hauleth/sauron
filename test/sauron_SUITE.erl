@@ -1,6 +1,23 @@
+% SPDX-FileCopyrightText: 2026 Łukasz Niemier <~@hauleth.dev>
+%
+% SPDX-License-Identifier: Apache-2.0
+
 -module(sauron_SUITE).
 
--compile(export_all).
+-export([
+    all/0,
+    init_per_suite/1,
+    end_per_suite/1,
+    init_per_testcase/2,
+    end_per_testcase/2
+]).
+
+-export([
+    telemetry_registry/1,
+    long_message_queue/1,
+    long_process_schedule/1,
+    large_heap/1
+]).
 
 -include_lib("stdlib/include/assert.hrl").
 -include_lib("common_test/include/ct.hrl").
@@ -9,27 +26,62 @@ all() ->
     [
         telemetry_registry,
         long_message_queue,
+        long_process_schedule,
         large_heap
     ].
 
-init_per_testcase(_Name, Config) ->
+init_per_suite(Config) ->
     {ok, _} = application:ensure_all_started(sauron),
+    telemetry_registry:discover_all(sauron),
+    Config.
+end_per_suite(Config) ->
+    Config.
+
+init_per_testcase(Name, Config) ->
+    Events =
+        #{
+            Ev => sauron_telemetry_spec:compile(Meta)
+         || {Ev, _, Meta} <- telemetry_registry:list_events()
+        },
+    telemetry:attach_many(
+        {?MODULE, Name},
+        maps:keys(Events),
+        fun telemetry_callback/4,
+        {self(), Events}
+    ),
     Config.
 
 end_per_testcase(Name, _Config) ->
     telemetry:detach({?MODULE, Name}).
 
--define(capture(Suffix), capture(?FUNCTION_NAME, Suffix)).
+telemetry_callback([erlang, sys_mon | EventName] = E, Measure, Meta, {Listener, Specs}) when
+    is_pid(Listener)
+->
+    maybe
+        #{E := {MeasSpec, MetaSpec}} ?= Specs,
+        {true, _, _, _} ?=
+            {sauron_telemetry_spec:validate(MeasSpec, Measure), measure, MeasSpec, Measure},
+        {true, _, _, _} ?= {sauron_telemetry_spec:validate(MetaSpec, Meta), meta, MetaSpec, Meta},
+        Listener ! {event, EventName, Measure, Meta}
+    else
+        {_, Type, Spec, Val} ->
+            Listener !
+                {ct_fail, "Event ~p ~p do not match spec:~n~nType: ~p~nValue: ~p", [
+                    E, Type, Spec, Val
+                ]}
+    end.
 
 -define(assertReceive(Message, Timeout, Log),
-    receive
-        Message -> ok
-    after Timeout -> ct:fail(Log)
-    end
+    Message = (fun() ->
+        receive
+            Message = __M -> __M;
+            {ct_fail, FailMsg, FailArgs} -> ct:fail(FailMsg, FailArgs)
+        after Timeout -> ct:fail(Log)
+        end
+    end)()
 ).
 
 telemetry_registry(_Config) ->
-    telemetry_registry:discover_all(sauron),
     Events = telemetry_registry:list_events(),
 
     ?assertMatch({_, _, _}, find_event([erlang, sys_mon, long_gc], Events)),
@@ -43,7 +95,6 @@ telemetry_registry(_Config) ->
 find_event(Name, Events) -> lists:keyfind(Name, 1, Events).
 
 long_message_queue(_Config) ->
-    ?capture([long_message_queue]),
     Pid = spawn(fun() -> message_loop(collect) end),
     [Pid ! N || N <- lists:seq(1, 1000)],
     ?assertReceive(
@@ -69,26 +120,17 @@ message_loop(drain) ->
         finish -> ok
     end.
 
+long_process_schedule(_Config) ->
+    _ = binary:copy(<<0>>, 50000000),
+    Self = self(),
+    ?assertReceive(
+        {event, [long_schedule, process], #{timeout := _}, #{pid := Self}},
+        5000,
+        "Haven't received event"
+    ).
+
 large_heap(_Config) ->
-    ?capture([large_heap]),
     Pid = self(),
-    _ = lists:seq(1, 1000000),
+    _ = lists:seq(1, 10000000),
     erlang:garbage_collect(),
     ?assertReceive({event, [large_heap], _, #{gc_pid := Pid}}, 5000, "Haven't received event").
-
-acc_loop(Acc) ->
-    receive
-        finish -> ok;
-        reset -> acc_loop([]);
-        Num when is_integer(Num) -> acc_loop([Num | Acc])
-    end.
-
-capture(Name, EventSuffix) ->
-    telemetry:attach(
-        Name,
-        [erlang, sys_mon] ++ EventSuffix,
-        fun([erlang, sys_mon | EventName], Measure, Meta, Listener) ->
-            Listener ! {event, EventName, Measure, Meta}
-        end,
-        self()
-    ).

@@ -3,11 +3,12 @@
 % SPDX-License-Identifier: Apache-2.0
 
 %%%-------------------------------------------------------------------
-%% @hidden
 %% sauron top level supervisor.
 %%%-------------------------------------------------------------------
 
 -module(sauron_sup).
+
+-moduledoc false.
 
 -behaviour(supervisor).
 

@@ -2,15 +2,17 @@
 %
 % SPDX-License-Identifier: Apache-2.0
 
-%% @hidden
-
 -module(sauron_sys_mon).
+
+-moduledoc false.
 
 -include_lib("kernel/include/logger.hrl").
 
 -behaviour(gen_server).
 
 -export([start_link/1]).
+
+-export([report_cb/1]).
 
 -export([
     init/1,
@@ -35,6 +37,12 @@ handle_cast(_Msg, State) ->
 handle_info({monitor, Subject, Type, Info}, State) ->
     execute(Type, Subject, Info),
 
+    {noreply, State};
+handle_info(Message, State) ->
+    ?LOG_WARNING(
+        #{unknown_message => Message, state => State},
+        #{report_cb => fun ?MODULE:report_cb/1}
+    ),
     {noreply, State}.
 
 % `long_gc` and `large_heap` have almost exactly the same format, so we can
@@ -79,4 +87,15 @@ execute(long_message_queue, Pid, true) ->
     telemetry:execute([erlang, sys_mon, long_message_queue], #{count => 1}, #{pid => Pid});
 % Process exited long_message_queue state
 execute(long_message_queue, Pid, false) ->
-    telemetry:execute([erlang, sys_mon, long_message_queue], #{count => -1}, #{pid => Pid}).
+    telemetry:execute([erlang, sys_mon, long_message_queue], #{count => -1}, #{pid => Pid});
+execute(Event, Data, Info) ->
+    ?LOG_ERROR(
+        #{unknown_erlang_event => {Event, Data, Info}},
+        #{report_cb => fun ?MODULE:report_cb/1}
+    ).
+
+-doc false.
+report_cb(#{unknown_message := Message}) ->
+    {"Handler received unknown message: ~p", [Message]};
+report_cb(#{unknown_erlang_event := {Event, Data, Info}}) ->
+    {"Received unknown Erlang system_monitor event: ~p~nData: ~p~nInfo: ~p", [Event, Data, Info]}.
