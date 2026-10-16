@@ -15,12 +15,12 @@
         ~"""
         #{
           timeout => pos_integer(),
-          heap_size => pos_integer(),
-          heap_block_size => pos_integer(),
-          stack_size => pos_integer(),
+          heap_block_size => non_neg_integer(),
+          heap_size => non_neg_integer(),
           mbuf_size => non_neg_integer(),
-          old_heap_size => pos_integer(),
-          old_heap_block_size => pos_integer()
+          old_heap_block_size => non_neg_integer(),
+          old_heap_size => non_neg_integer(),
+          stack_size => non_neg_integer()
         }
         """,
     metadata => ~"#{pid => pid()}"
@@ -31,15 +31,15 @@
     measurements =>
         ~"""
         #{
-          heap_size => pos_integer(),
-          heap_block_size => pos_integer(),
-          stack_size => pos_integer(),
+          heap_block_size => non_neg_integer(),
+          heap_size => non_neg_integer(),
           mbuf_size => non_neg_integer(),
-          old_heap_size => pos_integer(),
-          old_heap_block_size => pos_integer()
+          old_heap_block_size => non_neg_integer(),
+          old_heap_size => non_neg_integer(),
+          stack_size => non_neg_integer()
         }
         """,
-    metadata => ~"#{gc_pid => pid()}"
+    metadata => ~"#{pid => pid()}"
 }).
 
 -telemetry_event(#{

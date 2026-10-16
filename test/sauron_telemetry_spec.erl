@@ -1,3 +1,7 @@
+% SPDX-FileCopyrightText: 2026 Łukasz Niemier <~@hauleth.dev>
+%
+% SPDX-License-Identifier: Apache-2.0
+
 -module(sauron_telemetry_spec).
 
 -export([compile/1, validate/2]).
@@ -27,6 +31,8 @@ build_field({type, _, map_field_assoc, [{atom, _, Key}, Type]}) ->
 validate({map, Spec}, Map) when is_map(Map) ->
     MapList = lists:keysort(1, maps:to_list(Map)),
     do_validate_map(Spec, MapList);
+validate({map, _Spec}, _Val) ->
+    false;
 validate({literal, Spec}, Val) ->
     Spec =:= Val;
 validate({type, pos_integer}, Val) ->
@@ -43,6 +49,8 @@ validate({type, port}, Val) ->
     is_port(Val);
 validate({type, mfa}, {M, F, A}) ->
     is_atom(M) andalso is_atom(F) andalso is_integer(A) andalso A >= 0;
+validate({type, mfa}, _Val) ->
+    false;
 validate({union, Types}, Val) ->
     lists:any(fun(T) -> validate(T, Val) end, Types).
 

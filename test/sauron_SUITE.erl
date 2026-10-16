@@ -16,7 +16,10 @@
     telemetry_registry/1,
     long_message_queue/1,
     long_process_schedule/1,
-    large_heap/1
+    long_gc/1,
+    large_heap/1,
+    busy_port/1,
+    busy_dist_port/1
 ]).
 
 -include_lib("stdlib/include/assert.hrl").
@@ -27,7 +30,10 @@ all() ->
         telemetry_registry,
         long_message_queue,
         long_process_schedule,
-        large_heap
+        long_gc,
+        large_heap,
+        busy_port,
+        busy_dist_port
     ].
 
 init_per_suite(Config) ->
@@ -133,4 +139,117 @@ large_heap(_Config) ->
     Pid = self(),
     _ = lists:seq(1, 10000000),
     erlang:garbage_collect(),
-    ?assertReceive({event, [large_heap], _, #{gc_pid := Pid}}, 5000, "Haven't received event").
+    ?assertReceive({event, [large_heap], _, #{pid := Pid}}, 5000, "Haven't received event").
+
+long_gc(_Config) ->
+    Self = self(),
+    with_monitor_option({long_gc, 10}, fun() ->
+        _ = lists:seq(1, 12000000),
+        erlang:garbage_collect(),
+        ?assertReceive(
+            {event, [long_gc], #{timeout := _}, #{pid := Self}},
+            5000,
+            "Haven't received event"
+        )
+    end).
+
+%% A port whose program never reads its standard input fills up its queue
+%% and suspends the process that writes to it.
+busy_port(_Config) ->
+    case os:find_executable("sleep") of
+        false ->
+            {skip, "No sleep executable"};
+        Sleep ->
+            Port = open_port({spawn_executable, Sleep}, [{args, ["15"]}]),
+            Flooder = spawn(fun() -> flood_port(Port) end),
+            try
+                ?assertReceive(
+                    {event, [busy_port], #{count := 1}, #{
+                        suspended_pid := Flooder, port := Port
+                    }},
+                    5000,
+                    "Haven't received event"
+                )
+            after
+                exit(Flooder, kill),
+                port_close(Port)
+            end
+    end.
+
+%% The distribution port fills up when the other node stops reading its
+%% socket. The peer node is stopped with SIGSTOP for the duration of the
+%% case and resumed in the cleanup.
+busy_dist_port(_Config) ->
+    maybe
+        ok ?= ensure_distribution(),
+        {ok, Peer, Node} ?= start_peer(),
+        stopped_peer_flood(Peer, Node)
+    end.
+
+stopped_peer_flood(Peer, Node) ->
+    Remote = spawn(Node, fun() -> timer:sleep(60000) end),
+    OsPid = lists:flatten(erpc:call(Node, os, getpid, [])),
+    try
+        [] = os:cmd("kill -STOP " ++ OsPid),
+        Flooder = spawn(fun() -> flood_dist(Remote) end),
+        try
+            ?assertReceive(
+                {event, [busy_dist_port], #{count := 1}, #{suspended_pid := Flooder, port := _}},
+                5000,
+                "Haven't received event"
+            )
+        after
+            exit(Flooder, kill)
+        end
+    after
+        _ = os:cmd("kill -CONT " ++ OsPid),
+        peer:stop(Peer)
+    end.
+
+%% Internal functions
+
+%% The system monitor is global for the VM, so the previous options are
+%% restored afterwards.
+with_monitor_option({Key, _} = Option, Fun) ->
+    {Monitor, Options} = erlang:system_monitor(),
+    _ = erlang:system_monitor(Monitor, [Option | lists:keydelete(Key, 1, Options)]),
+    try
+        Fun()
+    after
+        _ = erlang:system_monitor(Monitor, Options)
+    end.
+
+flood_port(Port) ->
+    Data = binary:copy(<<0>>, 1048576),
+    flood_port(Port, Data, 100).
+
+flood_port(_Port, _Data, 0) ->
+    ok;
+flood_port(Port, Data, N) ->
+    true = erlang:port_command(Port, Data),
+    flood_port(Port, Data, N - 1).
+
+flood_dist(Remote) ->
+    Data = binary:copy(<<0>>, 1048576),
+    flood_dist(Remote, Data, 500).
+
+flood_dist(_Remote, _Data, 0) ->
+    ok;
+flood_dist(Remote, Data, N) ->
+    Remote ! Data,
+    flood_dist(Remote, Data, N - 1).
+
+ensure_distribution() ->
+    case net_kernel:start([sauron_suite, shortnames]) of
+        {ok, _} -> ok;
+        {error, {already_started, _}} -> ok;
+        {error, Reason} -> {skip, {distribution, Reason}}
+    end.
+
+start_peer() ->
+    try peer:start_link(#{name => sauron_suite_peer, args => ["-noinput"], wait_boot => 10000}) of
+        {ok, Peer, Node} -> {ok, Peer, Node};
+        Error -> {skip, {peer, Error}}
+    catch
+        Class:Reason -> {skip, {peer, Class, Reason}}
+    end.

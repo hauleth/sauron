@@ -41,6 +41,7 @@ list is:
         - `stack_size`
         - `mbuf_size`
         - `old_heap_size`
+        - `old_heap_block_size`
     + metadata:
         - `pid`
 * `erlang.sys_mon.large_heap`:
@@ -50,6 +51,7 @@ list is:
         - `stack_size`
         - `mbuf_size`
         - `old_heap_size`
+        - `old_heap_block_size`
     + metadata:
         - `pid`
 * `erlang.sys_mon.long_schedule.process`:

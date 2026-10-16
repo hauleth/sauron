@@ -51,7 +51,7 @@ execute(Type, Pid, Info) when Type =:= long_gc; Type =:= large_heap ->
     telemetry:execute(
         [erlang, sys_mon, Type],
         maps:from_list(Info),
-        #{gc_pid => Pid}
+        #{pid => Pid}
     );
 execute(long_schedule, Pid, Info) when is_pid(Pid) ->
     {timeout, Timeout} = lists:keyfind(timeout, 1, Info),

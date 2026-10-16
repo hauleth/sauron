@@ -5,7 +5,7 @@
 {application, sauron, [
     {description, "Monitor Erlang VM for system events"},
     {vsn, git},
-    {registered, []},
+    {registered, [sauron_sup]},
     {mod, {sauron_app, []}},
     {applications, [
         kernel,
